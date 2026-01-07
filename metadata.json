@@ -1,5 +1,5 @@
 {
   "name": "Intitopia",
-  "description": "Eine 2D-Welt, in der Nutzer als geometrische Formen interagieren. Nutzt Proximity-Chat, um nur mit nahen Nachbarn zu kommunizieren.",
+  "description": "Eine Multiplayer-Welt für echte Menschen. Keine Bots. Nutzt Proximity-Chat.",
   "requestFramePermissions": []
 }

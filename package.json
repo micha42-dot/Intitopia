@@ -1,7 +1,7 @@
 {
   "name": "intitopia",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "homepage": "./",
   "scripts": {
@@ -12,7 +12,6 @@
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "@google/genai": "^0.2.1",
     "@supabase/supabase-js": "^2.39.0"
   },
   "devDependencies": {
