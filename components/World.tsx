@@ -11,7 +11,6 @@ import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
 interface WorldProps {
-  apiKey: string;
   username: string;
 }
 
@@ -33,7 +32,7 @@ const getDistance = (p1: Position, p2: Position) => {
   return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
 };
 
-const World: React.FC<WorldProps> = ({ apiKey, username }) => {
+const World: React.FC<WorldProps> = ({ username }) => {
   // State
   const [myId, setMyId] = useState<string | null>(null);
   const [entities, setEntities] = useState<Entity[]>([]);
@@ -47,7 +46,7 @@ const World: React.FC<WorldProps> = ({ apiKey, username }) => {
   // Refs
   const myEntityRef = useRef<Entity | null>(null);
   const keysPressed = useRef<Set<string>>(new Set());
-  const requestRef = useRef<number>();
+  const requestRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const lastSyncTime = useRef<number>(0);
@@ -157,7 +156,9 @@ const World: React.FC<WorldProps> = ({ apiKey, username }) => {
           case 'UPDATE_PLAYER':
               setEntities(prev => {
                   const exists = prev.find(e => e.id === data.entity.id);
-                  const remoteEntity = { ...data.entity, isPlayer: false };
+                  // Ensure remote players are marked as players (so they get the hero sprite, not the bot sprite)
+                  const remoteEntity = { ...data.entity, isPlayer: true }; 
+                  
                   if (exists) {
                       return prev.map(e => e.id === data.entity.id ? remoteEntity : e);
                   }
@@ -338,7 +339,6 @@ const World: React.FC<WorldProps> = ({ apiKey, username }) => {
           sendNetworkEvent({ type: 'PLAYER_KILLED', targetId: victimId! });
           
           // Local update immediately (optimistic UI)
-          // Actually, wait for echo? No, instant feedback is better
           setEntities(prev => prev.map(e => e.id === victimId ? { ...e, isDead: true } : e));
           
           if (myEntityRef.current) myEntityRef.current.lastKillTime = Date.now();
@@ -361,7 +361,7 @@ const World: React.FC<WorldProps> = ({ apiKey, username }) => {
     setEntities(prev => prev.map(e => e.id === myId ? { ...e, lastMessage: msg } : e));
     addLog(`"${text}"`, "Me");
 
-    // Send
+    // Send my message
     sendNetworkEvent({ type: 'CHAT_MESSAGE', id: myId, msg });
   };
 
@@ -479,7 +479,7 @@ const World: React.FC<WorldProps> = ({ apiKey, username }) => {
                 <button type="submit" disabled={player?.isDead} className="win31-btn py-1 font-bold active:translate-y-[1px] border border-black disabled:opacity-50">SEND</button>
              </form>
           </div>
-          <div className="text-[10px] text-center text-gray-600 font-mono">Intitopia Multiplayer v1.3 (Supabase)<br/>(c) 2024</div>
+          <div className="text-[10px] text-center text-gray-600 font-mono">Intitopia Multiplayer v1.6 (Colors)<br/>(c) 2024</div>
       </div>
     </div>
   );

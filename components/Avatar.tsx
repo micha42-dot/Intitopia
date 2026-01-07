@@ -41,29 +41,18 @@ const Avatar: React.FC<AvatarProps> = ({ entity, isCurrentUser, isInRange }) => 
                 <text x="16" y="18" textAnchor="middle" fill="black" fontSize="8" fontFamily="monospace">RIP</text>
             </svg>
         ) : (
-            <>
-                {/* Character Sprite */}
-                {entity.isPlayer ? (
-                    // Player: Hero Sprite
-                    <svg viewBox="0 0 32 32" className="w-full h-full drop-shadow-md">
-                    <rect x="10" y="4" width="12" height="10" fill="#fca5a5" /> 
-                    <rect x="8" y="2" width="16" height="4" fill="#555" /> 
-                    <rect x="6" y="14" width="20" height="14" fill="#2563eb" /> 
-                    <rect x="2" y="14" width="4" height="10" fill="#999" /> 
-                    <rect x="26" y="14" width="4" height="10" fill="#999" />
-                    </svg>
-                ) : (
-                    // Bot: Monster/NPC Sprite
-                    <svg viewBox="0 0 32 32" className="w-full h-full drop-shadow-md">
-                    <rect x="8" y="6" width="16" height="20" fill={entity.color} />
-                    <rect x="10" y="8" width="4" height="4" fill="white" /> 
-                    <rect x="18" y="8" width="4" height="4" fill="white" /> 
-                    <rect x="12" y="10" width="2" height="2" fill="black" /> 
-                    <rect x="20" y="10" width="2" height="2" fill="black" /> 
-                    <rect x="10" y="20" width="12" height="2" fill="black" /> 
-                    </svg>
-                )}
-            </>
+            // Player: Human Sprite
+            <svg viewBox="0 0 32 32" className="w-full h-full drop-shadow-md">
+                {/* Head (Skin color) */}
+                <rect x="10" y="4" width="12" height="10" fill="#fca5a5" /> 
+                {/* Hair (Dark Grey) */}
+                <rect x="8" y="2" width="16" height="4" fill="#555" /> 
+                {/* Shirt (Uses Entity Color) */}
+                <rect x="6" y="14" width="20" height="14" fill={entity.color} /> 
+                {/* Arms (Sleeves) */}
+                <rect x="2" y="14" width="4" height="10" fill="#999" /> 
+                <rect x="26" y="14" width="4" height="10" fill="#999" />
+            </svg>
         )}
       </div>
 

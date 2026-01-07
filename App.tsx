@@ -1,23 +1,18 @@
 import React, { useState } from 'react';
 import World from './components/World';
-import { initGemini } from './services/geminiService';
 
 function App() {
   const [username, setUsername] = useState('');
-  const [apiKey, setApiKey] = useState<string>(process.env.API_KEY || ''); // Optional now
   const [hasStarted, setHasStarted] = useState(false);
 
   const handleStart = () => {
     if (username.trim()) {
-      if (apiKey) {
-        initGemini(apiKey);
-      }
       setHasStarted(true);
     }
   };
 
   if (hasStarted) {
-    return <World username={username} apiKey={apiKey} />;
+    return <World username={username} />;
   }
 
   return (
@@ -59,18 +54,6 @@ function App() {
                     placeholder="PLAYER 1"
                     maxLength={12}
                     autoFocus
-                />
-            </div>
-
-            {/* Collapsible Advanced/Optional Section */}
-            <div className="mb-6 opacity-60 hover:opacity-100 transition-opacity">
-                 <label className="block text-[10px] mb-1">OPTIONAL: GEMINI API KEY (For AI Features)</label>
-                 <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    className="w-full win31-border-inset px-2 py-1 text-xs focus:outline-none font-mono"
-                    placeholder="Leave empty if unsure"
                 />
             </div>
 

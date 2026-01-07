@@ -1,18 +1,19 @@
 import { GoogleGenAI } from "@google/genai";
 
-let genAI: GoogleGenAI | null = null;
-
-export const initGemini = (apiKey: string) => {
-  genAI = new GoogleGenAI({ apiKey });
+// Declare process to satisfy TypeScript compiler in DOM environment
+declare const process: {
+  env: {
+    API_KEY: string;
+  }
 };
+
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const generateBotResponse = async (
   botName: string, 
   userMessage: string, 
   nearbyContext: string[]
 ): Promise<string> => {
-  if (!genAI) return "...";
-
   try {
     const prompt = `
       Du bist ${botName}, ein Bewohner von Intitopia, einer 2D-Welt aus einfachen Formen.
@@ -24,11 +25,11 @@ export const generateBotResponse = async (
       Bleibe in der Rolle. Antworte auf Deutsch.
     `;
 
-    const response = await genAI.models.generateContent({
+    const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
-        maxOutputTokens: 30,
+        thinkingConfig: { thinkingBudget: 0 },
         temperature: 0.8,
       }
     });
