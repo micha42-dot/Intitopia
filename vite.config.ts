@@ -6,6 +6,9 @@ export default defineConfig({
   plugins: [react()],
   base: './', // Important for GitHub Pages relative paths
   define: {
-    'process.env': {} // Simple polyfill to avoid crashing on process.env access
+    // Allows process.env.API_KEY to be populated by build environment if set
+    'process.env.API_KEY': JSON.stringify(process.env.API_KEY),
+    // Fallback for other process.env usage to prevent crashes
+    'process.env': {} 
   }
 });
