@@ -3,7 +3,7 @@ import { Entity, Position, Message, EnvironmentItem as EnvItemType } from '../ty
 import { 
   WORLD_WIDTH, WORLD_HEIGHT, ENTITY_SIZE, COLORS, 
   MOVEMENT_SPEED, PROXIMITY_RADIUS, KILL_RADIUS, KILL_COOLDOWN,
-  TREE_COUNT, GRASS_COUNT
+  TREE_COUNT, GRASS_COUNT, MAGIC_PLAYER_THRESHOLD, MAGIC_TIME_REQUIRED
 } from '../constants';
 import Avatar from './Avatar';
 import EnvironmentItem from './EnvironmentItem';
@@ -43,8 +43,13 @@ const World: React.FC<WorldProps> = ({ username }) => {
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [statusMessage, setStatusMessage] = useState<string>("");
   
+  // Magic Door State
+  const [isDoorMagical, setIsDoorMagical] = useState(false);
+  const highTrafficStartTime = useRef<number | null>(null);
+  
   // Refs
   const myEntityRef = useRef<Entity | null>(null);
+  const entitiesRef = useRef<Entity[]>([]); // To access entities in event handlers
   const keysPressed = useRef<Set<string>>(new Set());
   const requestRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
@@ -145,6 +150,35 @@ const World: React.FC<WorldProps> = ({ username }) => {
     }
   }, []);
 
+  // Keep entities ref synced for event handlers
+  useEffect(() => {
+      entitiesRef.current = entities;
+  }, [entities]);
+
+  // --- MAGIC DOOR LOGIC ---
+  useEffect(() => {
+      const checkMagic = setInterval(() => {
+          const activePlayers = entitiesRef.current.filter(e => !e.isDead).length;
+          
+          if (activePlayers >= MAGIC_PLAYER_THRESHOLD) {
+              if (highTrafficStartTime.current === null) {
+                  highTrafficStartTime.current = Date.now();
+              } else {
+                  // Check duration
+                  if (Date.now() - highTrafficStartTime.current >= MAGIC_TIME_REQUIRED) {
+                      setIsDoorMagical(true);
+                  }
+              }
+          } else {
+              // Reset if drops below threshold
+              highTrafficStartTime.current = null;
+              setIsDoorMagical(false);
+          }
+      }, 5000); // Check every 5 seconds
+
+      return () => clearInterval(checkMagic);
+  }, []);
+
   // --- UNIFIED NETWORK HANDLER ---
   const handleNetworkEvent = (data: BroadcastEvent, myPlayerId: string) => {
       // Update peer timestamp to keep them alive
@@ -189,7 +223,19 @@ const World: React.FC<WorldProps> = ({ username }) => {
               break;
 
           case 'CHAT_MESSAGE':
+              // Update visual bubble
               setEntities(prev => prev.map(e => e.id === data.id ? { ...e, lastMessage: data.msg } : e));
+              
+              // Log message if in proximity
+              const sender = entitiesRef.current.find(e => e.id === data.id);
+              const me = myEntityRef.current;
+              
+              if (sender && me) {
+                  const dist = getDistance(me.position, sender.position);
+                  if (dist <= PROXIMITY_RADIUS) {
+                      addLog(data.msg.text, sender.name);
+                  }
+              }
               break;
       }
   };
@@ -390,7 +436,13 @@ const World: React.FC<WorldProps> = ({ username }) => {
                   backgroundSize: '40px 40px'
               }}
           >
-              {environment.map(item => <EnvironmentItem key={item.id} item={item} />)}
+              {environment.map(item => (
+                  <EnvironmentItem 
+                    key={item.id} 
+                    item={item} 
+                    isMagicActive={item.type === 'door' && isDoorMagical} 
+                  />
+              ))}
               {entities.map(entity => (
                   <Avatar 
                       key={entity.id} 
@@ -404,6 +456,12 @@ const World: React.FC<WorldProps> = ({ username }) => {
           <div className={`absolute top-2 left-2 px-1 border border-black text-xs font-bold pointer-events-none ${statusMessage.includes("LOCAL") ? 'bg-yellow-300 text-black' : (statusMessage.includes("ERROR") ? 'bg-red-500 text-white animate-pulse' : 'bg-white/80')}`}>
              {statusMessage || "MULTIPLAYER LIVE"}
           </div>
+
+          {isDoorMagical && (
+              <div className="absolute top-8 left-2 px-1 border border-black bg-purple-600 text-white text-xs font-bold animate-pulse pointer-events-none">
+                 ✧ THE PORTAL IS ACTIVE ✧
+              </div>
+          )}
           
           {player?.isDead && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-50">
@@ -479,7 +537,7 @@ const World: React.FC<WorldProps> = ({ username }) => {
                 <button type="submit" disabled={player?.isDead} className="win31-btn py-1 font-bold active:translate-y-[1px] border border-black disabled:opacity-50">SEND</button>
              </form>
           </div>
-          <div className="text-[10px] text-center text-gray-600 font-mono">Intitopia Multiplayer v1.6 (Colors)<br/>(c) 2024</div>
+          <div className="text-[10px] text-center text-gray-600 font-mono">Intitopia Multiplayer v1.7 (Magic)<br/>(c) 2024</div>
       </div>
     </div>
   );
