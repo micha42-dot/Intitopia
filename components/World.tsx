@@ -23,6 +23,10 @@ type BroadcastEvent =
   | { type: 'REQUEST_STATE'; requesterId: string } 
   | { type: 'STATE_RESPONSE'; entities: Entity[] }; 
 
+// Position of the Mountain Gate
+const DOOR_POS = { x: WORLD_WIDTH - 250, y: 250 };
+const DOOR_CLEARING_RADIUS = 350; // Radius around door where no trees spawn
+
 const getRandomPos = (): Position => ({
   x: Math.random() * (WORLD_WIDTH - 100) + 50,
   y: Math.random() * (WORLD_HEIGHT - 100) + 50
@@ -31,6 +35,10 @@ const getRandomPos = (): Position => ({
 const getDistance = (p1: Position, p2: Position) => {
   return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
 };
+
+// Base64 Pixel Pattern for Ground (16x16 Noise)
+const GROUND_TEXTURE = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAABlBMVEUAAAD///+l2Z/dAAAAAnRSTlP/AOW3MEoAAAAtSURBVBjTY2DAA0wM6IAJqyI2hIlBEYsCJgYVLAqYGFRREsiKiJJAJgJ1AwEAdokA80Z53ZMAAAAASUVORK5CYII=";
+
 
 const World: React.FC<WorldProps> = ({ username }) => {
   // State
@@ -66,11 +74,35 @@ const World: React.FC<WorldProps> = ({ username }) => {
   useEffect(() => {
     // 1. Generate Environment
     const initialEnv: EnvItemType[] = [];
-    initialEnv.push({ id: 'mysterious-door', type: 'door', position: { x: WORLD_WIDTH - 250, y: 250 }, scale: 1.5, variant: 0 });
+    
+    // Add the Mountain Gate
+    initialEnv.push({ id: 'mysterious-door', type: 'door', position: DOOR_POS, scale: 1.5, variant: 0 });
+
+    // Helper to find a position not too close to the door
+    const getPosAwayFromDoor = () => {
+        let pos = getRandomPos();
+        let attempts = 0;
+        // Try up to 10 times to find a spot outside the clearing radius
+        while (getDistance(pos, DOOR_POS) < DOOR_CLEARING_RADIUS && attempts < 10) {
+            pos = getRandomPos();
+            attempts++;
+        }
+        return pos;
+    };
+
+    // Generate Trees (respecting clearing)
     for (let i = 0; i < TREE_COUNT; i++) {
-        initialEnv.push({ id: `tree-${i}`, type: 'tree', position: getRandomPos(), scale: 0.8 + Math.random() * 0.4, variant: 0 });
+        initialEnv.push({ id: `tree-${i}`, type: 'tree', position: getPosAwayFromDoor(), scale: 1, variant: 0 });
     }
-    for (let i = 0; i < GRASS_COUNT; i++) initialEnv.push({ id: `grass-${i}`, type: 'grass', position: getRandomPos(), scale: 1, variant: 0 });
+
+    // Generate Grass (can be closer, but maybe keep immediate area clear)
+    for (let i = 0; i < GRASS_COUNT; i++) {
+         let pos = getRandomPos();
+         // Grass clearing is smaller (150px)
+         if (getDistance(pos, DOOR_POS) < 150) continue; 
+         initialEnv.push({ id: `grass-${i}`, type: 'grass', position: pos, scale: 1, variant: 0 });
+    }
+
     setEnvironment(initialEnv);
 
     // 2. Create Local Player
@@ -84,7 +116,8 @@ const World: React.FC<WorldProps> = ({ username }) => {
         position: getRandomPos(),
         color: COLORS[Math.floor(Math.random() * COLORS.length)],
         isKiller: Math.random() < 0.1,
-        isDead: false
+        isDead: false,
+        messages: []
     };
 
     myEntityRef.current = initialMe;
@@ -191,10 +224,10 @@ const World: React.FC<WorldProps> = ({ username }) => {
               setEntities(prev => {
                   const exists = prev.find(e => e.id === data.entity.id);
                   // Ensure remote players are marked as players (so they get the hero sprite, not the bot sprite)
-                  const remoteEntity = { ...data.entity, isPlayer: true }; 
-                  
+                  const remoteEntity = { ...data.entity, isPlayer: true };
+                  // Preserve local messages if not sent in update (optional safety, though remote normally sends full state)
                   if (exists) {
-                      return prev.map(e => e.id === data.entity.id ? remoteEntity : e);
+                      return prev.map(e => e.id === data.entity.id ? { ...remoteEntity, messages: e.messages || [] } : e);
                   }
                   return [...prev, remoteEntity];
               });
@@ -223,8 +256,16 @@ const World: React.FC<WorldProps> = ({ username }) => {
               break;
 
           case 'CHAT_MESSAGE':
-              // Update visual bubble
-              setEntities(prev => prev.map(e => e.id === data.id ? { ...e, lastMessage: data.msg } : e));
+              // Update visual bubble - Stack messages, keep last 3
+              setEntities(prev => prev.map(e => {
+                  if (e.id === data.id) {
+                      const currentMessages = e.messages || [];
+                      // Add new message, slice to keep last 3
+                      const newMessages = [...currentMessages, data.msg].slice(-3);
+                      return { ...e, messages: newMessages };
+                  }
+                  return e;
+              }));
               
               // Log message if in proximity
               const sender = entitiesRef.current.find(e => e.id === data.id);
@@ -404,7 +445,14 @@ const World: React.FC<WorldProps> = ({ username }) => {
     const msg: Message = { id: Date.now().toString(), text, senderId: myId, timestamp: Date.now() };
 
     // Update local immediately
-    setEntities(prev => prev.map(e => e.id === myId ? { ...e, lastMessage: msg } : e));
+    setEntities(prev => prev.map(e => {
+        if (e.id === myId) {
+             const currentMessages = e.messages || [];
+             const newMessages = [...currentMessages, msg].slice(-3);
+             return { ...e, messages: newMessages };
+        }
+        return e;
+    }));
     addLog(`"${text}"`, "Me");
 
     // Send my message
@@ -431,44 +479,56 @@ const World: React.FC<WorldProps> = ({ username }) => {
                   width: WORLD_WIDTH,
                   height: WORLD_HEIGHT,
                   transform: `translate(${-camera.x}px, ${-camera.y}px)`,
-                  backgroundColor: '#509b2e', 
-                  backgroundImage: `linear-gradient(#468a28 1px, transparent 1px), linear-gradient(90deg, #468a28 1px, transparent 1px)`,
-                  backgroundSize: '40px 40px'
+                  // UO Style Dark Grass Background with simple noise
+                  backgroundColor: '#0a3d0a', 
+                  backgroundImage: `url(${GROUND_TEXTURE})`,
+                  backgroundSize: '64px 64px', // Scale up our 16px noise
+                  imageRendering: 'pixelated'
               }}
           >
-              {environment.map(item => (
-                  <EnvironmentItem 
-                    key={item.id} 
-                    item={item} 
-                    isMagicActive={item.type === 'door' && isDoorMagical} 
-                  />
-              ))}
-              {entities.map(entity => (
-                  <Avatar 
-                      key={entity.id} 
-                      entity={entity} 
-                      isCurrentUser={entity.id === myId}
-                      isInRange={player ? getDistance(player.position, entity.position) <= PROXIMITY_RADIUS : false}
-                  />
-              ))}
+              {/* Z-Index Sorting Layer - Entities and Env Items sorted by Y position */}
+              {[...environment, ...entities].sort((a, b) => a.position.y - b.position.y).map(obj => {
+                  if ('isPlayer' in obj) {
+                      const entity = obj as Entity;
+                      return (
+                          <Avatar 
+                              key={entity.id} 
+                              entity={entity} 
+                              isCurrentUser={entity.id === myId}
+                              isInRange={player ? getDistance(player.position, entity.position) <= PROXIMITY_RADIUS : false}
+                          />
+                      );
+                  } else {
+                      const envItem = obj as EnvItemType;
+                      return (
+                          <EnvironmentItem 
+                              key={envItem.id} 
+                              item={envItem} 
+                              isMagicActive={envItem.type === 'door' && isDoorMagical} 
+                          />
+                      );
+                  }
+              })}
           </div>
           
-          <div className={`absolute top-2 left-2 px-1 border border-black text-xs font-bold pointer-events-none ${statusMessage.includes("LOCAL") ? 'bg-yellow-300 text-black' : (statusMessage.includes("ERROR") ? 'bg-red-500 text-white animate-pulse' : 'bg-white/80')}`}>
+          <div className={`absolute top-2 left-2 px-1 border border-black text-xs font-bold pointer-events-none ${statusMessage.includes("LOCAL") ? 'bg-yellow-300 text-black' : (statusMessage.includes("ERROR") ? 'bg-red-500 text-white animate-pulse' : 'bg-white/80')}`} style={{fontFamily: '"Pixelify Sans", sans-serif'}}>
              {statusMessage || "MULTIPLAYER LIVE"}
           </div>
 
           {isDoorMagical && (
-              <div className="absolute top-8 left-2 px-1 border border-black bg-purple-600 text-white text-xs font-bold animate-pulse pointer-events-none">
-                 ✧ THE PORTAL IS ACTIVE ✧
+              <div className="absolute top-8 left-2 px-1 border border-black bg-purple-600 text-white text-xs font-bold animate-pulse pointer-events-none" style={{fontFamily: '"Pixelify Sans", sans-serif'}}>
+                 ✧ THE MOONGATE IS OPEN ✧
               </div>
           )}
           
           {player?.isDead && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-50">
-                  <div className="bg-red-900 text-white p-4 border-4 border-white win31-border-outset animate-pulse flex flex-col items-center">
-                      <h1 className="text-4xl font-bold mb-4">YOU ARE DEAD</h1>
-                      <button onClick={() => window.location.reload()} className="win31-btn px-4 py-2 text-black font-bold border border-white">
-                          REJOIN
+                  <div className="bg-[#a8a8a8] text-black p-1 border-2 border-white shadow-xl flex flex-col items-center w-64">
+                      <div className="w-full bg-[#000080] text-white px-1 mb-2 font-bold text-center text-xs">System Message</div>
+                      <div className="text-4xl font-bold mb-2">†</div>
+                      <div className="text-sm mb-4 font-bold">You are dead.</div>
+                      <button onClick={() => window.location.reload()} className="win31-btn px-4 py-1 text-black font-bold border border-black text-xs mb-2">
+                          RESURRECT
                       </button>
                   </div>
               </div>
@@ -478,19 +538,19 @@ const World: React.FC<WorldProps> = ({ username }) => {
       {/* Sidebar */}
       <div className="w-80 flex flex-col gap-3 p-2">
           <div className="win31-border-inset bg-white p-2 font-mono text-sm">
-              <div className="bg-[#000080] text-white px-1 mb-2 font-bold text-center">CHARACTER</div>
+              <div className="bg-[#000080] text-white px-1 mb-2 font-bold text-center">CHARACTER SHEET</div>
               <div className="grid grid-cols-2 gap-x-2">
                   <span>NAME:</span> <span className="text-right font-bold">{player?.name || 'Loading...'}</span>
-                  <span>STATUS:</span> <span className={`text-right font-bold ${player?.isDead ? 'text-red-600' : 'text-green-600'}`}>{player?.isDead ? 'DEAD' : 'ALIVE'}</span>
-                  <span>ROLE:</span> <span className="text-right">{player?.isKiller ? 'KILLER' : 'CITIZEN'}</span>
-                  <span>ONLINE:</span> <span className="text-right">{entities.filter(e => !e.isDead).length}</span>
+                  <span>STATUS:</span> <span className={`text-right font-bold ${player?.isDead ? 'text-red-600' : 'text-green-600'}`}>{player?.isDead ? 'GHOST' : 'HEALTHY'}</span>
+                  <span>Karma:</span> <span className="text-right">{player?.isKiller ? 'Red (Killer)' : 'Blue (Innocent)'}</span>
+                  <span>Citizens:</span> <span className="text-right">{entities.filter(e => !e.isDead).length}</span>
               </div>
           </div>
 
           <div className="flex-1 flex flex-col min-h-0 relative">
-             <div className="bg-[#000080] text-white px-1 font-bold text-center mb-1">MESSAGES</div>
+             <div className="bg-[#000080] text-white px-1 font-bold text-center mb-1">JOURNAL</div>
              <div ref={logContainerRef} className="flex-1 win31-border-inset bg-white overflow-y-scroll p-2 font-mono text-sm leading-snug">
-                {messageLog.length === 0 && <span className="text-gray-400 italic">Connected...</span>}
+                {messageLog.length === 0 && <span className="text-gray-400 italic">Welcome to Britannia...</span>}
                 {messageLog.map(msg => (
                     <div key={msg.id} className="mb-1">
                         <span className={`font-bold ${msg.senderId === 'System' ? 'text-gray-500' : (msg.senderId === 'Combat' ? 'text-red-600' : 'text-blue-800')}`}>
@@ -510,8 +570,8 @@ const World: React.FC<WorldProps> = ({ username }) => {
                     className={`win31-btn py-4 font-bold border-2 text-xl ${killCooldownRemaining > 0 ? 'bg-gray-400 text-gray-600 border-gray-500 cursor-not-allowed' : 'bg-red-100 text-red-900 border-red-800 active:bg-red-200'}`}
                   >
                       {killCooldownRemaining > 0 ? (
-                          <div className="flex flex-col items-center"><span className="text-sm">COOLDOWN</span><span>{cooldownStr}</span></div>
-                      ) : "⚠ KILL TARGET ⚠"}
+                          <div className="flex flex-col items-center"><span className="text-sm">Paralyzed</span><span>{cooldownStr}</span></div>
+                      ) : "⚔ ATTACK ⚔"}
                   </button>
                   {killCooldownRemaining > 0 && (
                       <div className="w-full h-2 bg-gray-300 border border-gray-500 relative">
@@ -523,7 +583,7 @@ const World: React.FC<WorldProps> = ({ username }) => {
 
           <div className="win31-border-outset p-2 bg-[#c0c0c0]">
              <form onSubmit={handleChatSubmit} className="flex flex-col gap-2">
-                <label className="text-xs font-bold uppercase">Chat Input:</label>
+                <label className="text-xs font-bold uppercase">Say:</label>
                 <input 
                     type="text" 
                     className="w-full win31-border-inset px-2 py-1 focus:outline-none font-mono text-sm"
@@ -534,10 +594,10 @@ const World: React.FC<WorldProps> = ({ username }) => {
                     maxLength={100}
                     disabled={player?.isDead}
                 />
-                <button type="submit" disabled={player?.isDead} className="win31-btn py-1 font-bold active:translate-y-[1px] border border-black disabled:opacity-50">SEND</button>
+                <button type="submit" disabled={player?.isDead} className="win31-btn py-1 font-bold active:translate-y-[1px] border border-black disabled:opacity-50">ENTER</button>
              </form>
           </div>
-          <div className="text-[10px] text-center text-gray-600 font-mono">Intitopia Multiplayer v1.7 (Magic)<br/>(c) 2024</div>
+          <div className="text-[10px] text-center text-gray-600 font-mono">Intitopia Online<br/>Based on UO Aesthetics</div>
       </div>
     </div>
   );

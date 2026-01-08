@@ -7,7 +7,7 @@ export const VIEWPORT_HEIGHT = window.innerHeight;
 export const ENTITY_SIZE = 40; // pixels
 export const MOVEMENT_SPEED = 2.5; // pixels per tick (Reduced from 5)
 export const PROXIMITY_RADIUS = 250; // pixels to hear chat
-export const MESSAGE_LIFETIME = 6000; // ms
+export const MESSAGE_LIFETIME = 8000; // ms (Increased from 6000)
 export const KILL_RADIUS = 60; // Range for kill action
 export const KILL_COOLDOWN = 120 * 1000; // 2 minutes in ms
 

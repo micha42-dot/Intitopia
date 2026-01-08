@@ -1,3 +1,4 @@
+
 export interface Position {
   x: number;
   y: number;
@@ -16,7 +17,7 @@ export interface Entity {
   isPlayer: boolean;
   position: Position;
   color: string;
-  lastMessage?: Message;
+  messages: Message[]; // Changed from lastMessage to support history
   targetPosition?: Position; 
   isKiller?: boolean;
   isDead?: boolean;
